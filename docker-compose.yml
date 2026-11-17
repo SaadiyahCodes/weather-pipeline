@@ -1,0 +1,34 @@
+services:
+  prefect:
+    image: prefecthq/prefect:3-latest
+    command: prefect server start --host 0.0.0.0
+    ports: ["4200:4200"]
+    volumes: ["prefect-data:/root/.prefect"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  pipeline:
+    build: .
+    # add --offline to use synthetic data if the venue Wi-Fi is bad
+    command: python -m pipeline.flow
+    environment:
+      PREFECT_API_URL: http://prefect:4200/api
+      PIPELINE_DATA_DIR: /app/data
+    volumes: ["./data:/app/data"]
+    depends_on:
+      prefect:
+        condition: service_healthy
+
+  dashboard:
+    build: .
+    command: streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    environment:
+      PIPELINE_DATA_DIR: /app/data
+    ports: ["8501:8501"]
+    volumes: ["./data:/app/data"]
+
+volumes:
+  prefect-data:
